@@ -30,3 +30,5 @@ Print with more detailed image.
 
 Print with graphic informations.
 ![Detail of graphic information](/img/visual-simulation.png)
+
+Agent geliştirmeleri başladı.
