@@ -9,32 +9,33 @@
 
 ---
 
-## 📋 Overview
+## Overview
 
 **Melissa** is an advanced multi-agent system that simulates the complex social behaviors and organizational structure of a bee hive. Built using the **JaCaMo** framework, this project demonstrates how autonomous agents can work together through beliefs, goals, and actions to maintain a thriving colony.
 
 The simulation models realistic bee behaviors including:
-- 🍯 **Honey production and resource management**
-- 🌡️ **Temperature control within the hive**
-- 🥚 **Colony reproduction and larva development**
-- 🔍 **Exploration and food source discovery**
-- 🛡️ **Hive defense mechanisms**
+
+- **Honey production and resource management**
+- **Temperature control within the hive**
+- **Colony reproduction and larva development**
+- **Exploration and food source discovery**
+- **Hive defense mechanisms**
 
 ---
 
-## ✨ Features
+## Features
 
-| Feature | Description |
-|---------|-------------|
-| **Autonomous Agents** | Each bee operates independently with its own beliefs, goals, and decision-making |
+| Feature                           | Description                                                                         |
+| --------------------------------- | ----------------------------------------------------------------------------------- |
+| **Autonomous Agents**       | Each bee operates independently with its own beliefs, goals, and decision-making    |
 | **Role-Based Organization** | Agents adopt roles (Queen, Nurse, Sentinel, Explorer) based on age and colony needs |
-| **Real-Time Visualization** | JavaFX-powered graphics display hive state, bee movements, and statistics |
-| **BDI Architecture** | Belief-Desire-Intention model for realistic agent behavior |
-| **Dynamic Environment** | Simulated world with flowers, weather conditions, and seasonal changes |
+| **Real-Time Visualization** | JavaFX-powered graphics display hive state, bee movements, and statistics           |
+| **BDI Architecture**        | Belief-Desire-Intention model for realistic agent behavior                          |
+| **Dynamic Environment**     | Simulated world with flowers, weather conditions, and seasonal changes              |
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 melissa/
@@ -67,16 +68,16 @@ melissa/
 
 ### Agent Configuration
 
-| Agent Type | Instances | Initial Age | Role |
-|------------|-----------|-------------|------|
-| Queen | 1 | - | Monarch (egg laying, colony management) |
-| Nurse | 12 | 0 | Larva care and feeding |
-| Sentinel | 4 | 18 | Hive protection and monitoring |
-| Explorer | 20 | 22 | Food source discovery |
+| Agent Type | Instances | Initial Age | Role                                    |
+| ---------- | --------- | ----------- | --------------------------------------- |
+| Queen      | 1         | -           | Monarch (egg laying, colony management) |
+| Nurse      | 12        | 0           | Larva care and feeding                  |
+| Sentinel   | 4         | 18          | Hive protection and monitoring          |
+| Explorer   | 20        | 22          | Food source discovery                   |
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### Prerequisites
 
@@ -104,7 +105,7 @@ cd MAS_Group1_Final_Project
 
 ---
 
-## 🎮 Usage
+## Usage
 
 Once running, the simulation will display:
 
@@ -128,36 +129,34 @@ Once running, the simulation will display:
 
 ---
 
-## 👥 Team
+## Team
 
-| Name | Role | GitHub |
-|------|------|--------|
-| **Hakkı Keman** | Agent Developer | [@hakkikeman](https://github.com/hakkikeman) |
-| **Can Türk Küçük** | Environment Developer | [@canturk3](https://github.com/canturk3) |
-| **Sefa Samet Sütçü** | Organisation Developer | [@SefaSutcu](https://github.com/SefaSutcu) |
+| Name                          | Role                   | GitHub                                    |
+| ----------------------------- | ---------------------- | ----------------------------------------- |
+| **Hakkı Keman**        | Agent Developer        | [@hakkikeman](https://github.com/hakkikeman) |
+| **Can Türk Küçük**  | Environment Developer  | [@canturk3](https://github.com/canturk3)     |
+| **Sefa Samet Sütçü** | Organisation Developer | [@SefaSutcu](https://github.com/SefaSutcu)   |
 
-> 📚 **Academic Project**: Developed as the Final Project for the *Multi-Agent Artificial Intelligence* course.
-
----
-
-## 🛠️ Technologies
-
-| Technology | Purpose |
-|------------|---------|
-| **JaCaMo** | Multi-agent programming framework |
-| **Jason** | AgentSpeak language for BDI agents |
-| **Moise** | Organizational modeling |
-| **CArtAgO** | Environment artifacts |
-| **JavaFX** | Visualization & UI |
+> **Academic Project**: Developed as the Final Project for the *Multi-Agent Artificial Intelligence* course.
 
 ---
 
-## 📄 License
+## Technologies
+
+| Technology        | Purpose                            |
+| ----------------- | ---------------------------------- |
+| **JaCaMo**  | Multi-agent programming framework  |
+| **Jason**   | AgentSpeak language for BDI agents |
+| **Moise**   | Organizational modeling            |
+| **CArtAgO** | Environment artifacts              |
+| **JavaFX**  | Visualization & UI                 |
+
+---
+
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
 **⭐ Star this repository if you find it interesting!**
-
-*Made with ❤️ by Group 1*
