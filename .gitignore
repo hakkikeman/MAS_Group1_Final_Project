@@ -1,14 +1,86 @@
+# =====================================
+# Java / JaCaMo Project .gitignore
+# =====================================
 
+# Compiled class files
 *.class
-bin/melissa.xml
-bin/melissa.xml
+
+# Log files
+*.log
+log/
+
+# Package files
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Error files
 e_r_r_o_r.txt
-bin/melissa.xml
-bin/melissa.xml
-bin/melissa.xml
 
-# Ignore Gradle project-specific cache directory
-.gradle
+# =====================================
+# Gradle
+# =====================================
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
 
-# Ignore Gradle build output directory
-build
+# =====================================
+# IDE - Eclipse
+# =====================================
+.classpath
+.project
+.settings/
+.metadata/
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+
+# =====================================
+# IDE - IntelliJ IDEA
+# =====================================
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# =====================================
+# IDE - VS Code
+# =====================================
+.vscode/
+
+# =====================================
+# IDE - NetBeans
+# =====================================
+nbproject/private/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# =====================================
+# OS generated files
+# =====================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# =====================================
+# JaCaMo specific
+# =====================================
+bin/melissa.xml

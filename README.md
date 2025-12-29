@@ -1,17 +1,11 @@
-<![CDATA[<div align="center">
-
 # 🐝 Melissa - Multi-Agent Bee Hive Simulation
 
-[![JaCaMo](https://img.shields.io/badge/JaCaMo-Multi--Agent%20System-orange?style=for-the-badge)](http://jacamo.sourceforge.net/)
-[![JavaFX](https://img.shields.io/badge/JavaFX-Visualization-blue?style=for-the-badge)](https://openjfx.io/)
-[![Java](https://img.shields.io/badge/Java-11+-red?style=for-the-badge&logo=java)](https://www.oracle.com/java/)
-[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+![JaCaMo](https://img.shields.io/badge/JaCaMo-Multi--Agent%20System-orange?style=for-the-badge)
+![JavaFX](https://img.shields.io/badge/JavaFX-Visualization-blue?style=for-the-badge)
+![Java](https://img.shields.io/badge/Java-11+-red?style=for-the-badge&logo=java)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 **A sophisticated multi-agent simulation of a bee colony ecosystem using JaCaMo framework and JavaFX visualization.**
-
-[Features](#-features) • [Architecture](#-architecture) • [Installation](#-installation) • [Usage](#-usage) • [Team](#-team)
-
-</div>
 
 ---
 
@@ -60,15 +54,15 @@ melissa/
 
 ### Agent Hierarchy
 
-```mermaid
-graph TD
-    Q[👑 Queen] --> N[🍼 Nurses]
-    Q --> S[🛡️ Sentinels]
-    Q --> E[🔍 Explorers]
-    
-    N -->|Care for| L[🥚 Larvae]
-    S -->|Protect| H[🏠 Hive]
-    E -->|Find| F[🌸 Flowers]
+```
+        👑 Queen
+       /   |   \
+      /    |    \
+   🍼     🛡️     🔍
+ Nurses Sentinels Explorers
+    |      |        |
+    v      v        v
+ 🥚Larvae 🏠Hive  🌸Flowers
 ```
 
 ### Agent Configuration
@@ -120,32 +114,27 @@ Once running, the simulation will display:
 
 ### Demo
 
-<div align="center">
-
 ![Melissa Running](img/melissa-running.gif)
+
 *Real-time simulation with agent reports and activity logs*
 
 ![Running Stats](img/running-stats.png)
+
 *Detailed view of agent actions and hive statistics*
 
 ![Visual Simulation](img/visual-simulation.png)
-*Graphical representation of the bee colony*
 
-</div>
+*Graphical representation of the bee colony*
 
 ---
 
 ## 👥 Team
 
-<div align="center">
-
-| <img src="https://github.com/hakkikeman.png" width="100" style="border-radius:50%"> | <img src="https://github.com/canturk3.png" width="100" style="border-radius:50%"> | <img src="https://github.com/SefaSutcu.png" width="100" style="border-radius:50%"> |
-|:---:|:---:|:---:|
-| **Hakkı Keman** | **Can Türk Küçük** | **Sefa Samet Sütçü** |
-| Agent Developer | Environment Developer | Organisation Developer |
-| [@hakkikeman](https://github.com/hakkikeman) | [@canturk3](https://github.com/canturk3) | [@SefaSutcu](https://github.com/SefaSutcu) |
-
-</div>
+| Name | Role | GitHub |
+|------|------|--------|
+| **Hakkı Keman** | Agent Developer | [@hakkikeman](https://github.com/hakkikeman) |
+| **Can Türk Küçük** | Environment Developer | [@canturk3](https://github.com/canturk3) |
+| **Sefa Samet Sütçü** | Organisation Developer | [@SefaSutcu](https://github.com/SefaSutcu) |
 
 > 📚 **Academic Project**: Developed as the Final Project for the *Multi-Agent Artificial Intelligence* course.
 
@@ -153,17 +142,13 @@ Once running, the simulation will display:
 
 ## 🛠️ Technologies
 
-<div align="center">
-
 | Technology | Purpose |
 |------------|---------|
-| ![JaCaMo](https://img.shields.io/badge/JaCaMo-Multi--Agent-orange) | Agent programming & organization |
-| ![Jason](https://img.shields.io/badge/Jason-AgentSpeak-yellow) | BDI agent language |
-| ![Moise](https://img.shields.io/badge/Moise-Organization-purple) | Organizational modeling |
-| ![CArtAgO](https://img.shields.io/badge/CArtAgO-Artifacts-blue) | Environment artifacts |
-| ![JavaFX](https://img.shields.io/badge/JavaFX-Graphics-green) | Visualization & UI |
-
-</div>
+| **JaCaMo** | Multi-agent programming framework |
+| **Jason** | AgentSpeak language for BDI agents |
+| **Moise** | Organizational modeling |
+| **CArtAgO** | Environment artifacts |
+| **JavaFX** | Visualization & UI |
 
 ---
 
@@ -173,11 +158,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-<div align="center">
-
 **⭐ Star this repository if you find it interesting!**
 
-Made with ❤️ and ☕ by Group 1
-
-</div>
-]]>
+*Made with ❤️ by Group 1*
