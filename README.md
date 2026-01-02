@@ -1,4 +1,4 @@
-# 🐝 Melissa - Multi-Agent Bee Hive Simulation
+# Melissa - Multi-Agent Bee Hive Simulation
 
 ![JaCaMo](https://img.shields.io/badge/JaCaMo-Multi--Agent%20System-orange?style=for-the-badge)
 ![JavaFX](https://img.shields.io/badge/JavaFX-Visualization-blue?style=for-the-badge)
