@@ -26,7 +26,7 @@ import model.PollenField;
 import model.enumeration.HoneySupply;
 
 public class EnvironmentApplication extends Application {
-	public static EnvironmentApplication instance = null;
+	private static EnvironmentApplication instance = null;
 	private int width;
 	private int height;
 	private Group ground;

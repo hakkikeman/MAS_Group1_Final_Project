@@ -81,22 +81,19 @@ public class MapArtifact extends Artifact {
 
 	@OPERATION
 	void flyTo(int x, int y) {
-		Position beePos = Environment.getInstance().getBeePos(getCurrentOpAgentId().getAgentName());
-		if (beePos == null)
-			return;
-		int i = beePos.getX();
-		int j = beePos.getY();
-		if (!(x == i & y == j)) {
-			if (Math.abs(y - j) > Math.abs(x - i))
-				if (y - j > 0)
-					move(i, j + 1);
-				else
-					move(i, j - 1);
-			else if (x - i > 0)
-				move(i + 1, j);
-			else
-				move(i - 1, j);
-			flyTo(x, y);
+		String beeId = getCurrentOpAgentId().getAgentName();
+		Position beePos;
+		while (true) {
+			beePos = Environment.getInstance().getBeePos(beeId);
+			if (beePos == null) return;
+			int i = beePos.getX();
+			int j = beePos.getY();
+			if (x == i && y == j) break;
+			if (Math.abs(y - j) > Math.abs(x - i)) {
+				move(i, y - j > 0 ? j + 1 : j - 1);
+			} else {
+				move(x - i > 0 ? i + 1 : i - 1, j);
+			}
 		}
 	}
 

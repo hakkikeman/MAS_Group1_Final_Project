@@ -1,15 +1,17 @@
 package graphic;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import graphic.model.BeeGraphic;
 import javafx.scene.shape.Circle;
 import model.Bee;
 
 public class BeeResolver {
-	private Map<String, BeeGraphic> beeCircles = new HashMap<String, BeeGraphic>();
+	private final Map<String, BeeGraphic> beeCircles = new ConcurrentHashMap<>();
 
 	public Circle createBee(Bee bee, int positionX, int positionY) {
 		Circle circle = new Circle(4, bee.getColor());
@@ -29,9 +31,10 @@ public class BeeResolver {
 	}
 
 	/**
-	 * Get all bee IDs currently tracked
+	 * Get a snapshot of all bee IDs currently tracked.
+	 * Returns a copy to prevent ConcurrentModificationException during iteration.
 	 */
 	public Set<String> getAllBeeIds() {
-		return beeCircles.keySet();
+		return new HashSet<>(beeCircles.keySet());
 	}
 }

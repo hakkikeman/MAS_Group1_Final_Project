@@ -213,7 +213,7 @@ public class Environment {
 			@Override
 			public void run() {
 				Circle circle = beeResolver.getBee(beeId).getCircle();
-				EnvironmentApplication.instance.addBee(circle);
+				EnvironmentApplication.getInstance().addBee(circle);
 				map.updateBeeCount();
 			}
 		});
@@ -528,16 +528,11 @@ public class Environment {
 	}
 
 	/**
-	 * Check if position is inside hive area (used for target filtering)
+	 * Check if position is inside the hive area.
 	 */
 	private boolean isInsideHive(int x, int y) {
-		int HIVE_X = 649;
-		int HIVE_Y = 449;
-		int HIVE_WIDTH = 150;
-		int HIVE_HEIGHT = 150;
-
-		return x >= HIVE_X && x <= (HIVE_X + HIVE_WIDTH) &&
-				y >= HIVE_Y && y <= (HIVE_Y + HIVE_HEIGHT);
+		return x >= Parameters.HIVE_X && x <= (Parameters.HIVE_X + Parameters.HIVE_WIDTH)
+			&& y >= Parameters.HIVE_Y && y <= (Parameters.HIVE_Y + Parameters.HIVE_HEIGHT);
 	}
 
 	/**

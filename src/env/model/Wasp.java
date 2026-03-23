@@ -25,14 +25,17 @@ public class Wasp {
     private static final int WASP_SIZE = 12; // Larger than bees (4px)
 
     private Wasp() {
+        artifact.RunConfig cfg = artifact.RunConfig.getInstance();
         this.id = "wasp";
-        this.maxHealth = 200;
-        this.health = maxHealth;
-        this.alive = true;
-        this.speedMultiplier = 1.0; // Same speed as sentinels
-        this.attackRadius = 50; // Attack radius decreased to 50px
-        this.maxKillsPerAttack = 3; // Can kill up to 3 bees per attack
-        this.position = new Position(10, 10); // Spawn at top-left
+        this.maxHealth        = cfg.getWaspHealth();
+        this.health           = maxHealth;
+        this.alive            = true;
+        this.speedMultiplier  = 1.0;
+        this.attackRadius     = cfg.getWaspAttackRadius();
+        this.maxKillsPerAttack= cfg.getWaspMaxKills();
+        this.position         = new Position(10, 10);
+        System.out.printf("[Wasp] Initialised – hp=%d  radius=%d  maxKills=%d%n",
+                maxHealth, attackRadius, maxKillsPerAttack);
     }
 
     public static synchronized Wasp getInstance() {
@@ -178,18 +181,14 @@ public class Wasp {
     }
 
     /**
-     * Check if position is inside hive area
-     * Hive is at (649, 449) with size 150x150
+     * Check if position is inside (or within margin of) the hive area.
      */
     private boolean isInsideHive(int x, int y) {
-        int HIVE_X = 649;
-        int HIVE_Y = 449;
-        int HIVE_WIDTH = 150;
-        int HIVE_HEIGHT = 150;
-        int MARGIN = 10; // Stay 10px away from hive
-
-        return x >= (HIVE_X - MARGIN) && x <= (HIVE_X + HIVE_WIDTH + MARGIN) &&
-                y >= (HIVE_Y - MARGIN) && y <= (HIVE_Y + HIVE_HEIGHT + MARGIN);
+        final int MARGIN = 10;
+        return x >= (artifact.Parameters.HIVE_X - MARGIN)
+            && x <= (artifact.Parameters.HIVE_X + artifact.Parameters.HIVE_WIDTH + MARGIN)
+            && y >= (artifact.Parameters.HIVE_Y - MARGIN)
+            && y <= (artifact.Parameters.HIVE_Y + artifact.Parameters.HIVE_HEIGHT + MARGIN);
     }
 
     @Override

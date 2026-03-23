@@ -24,8 +24,7 @@ public class GeminiService {
     private static GeminiService instance;
     private String apiKey;
     private long lastCallTime = 0;
-    private static final long RATE_LIMIT_MS = 5000; // 5 seconds between calls
-    private static final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+    private static final String API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
     private final Gson gson = new Gson();
 
     // Async prefetch support
@@ -73,12 +72,16 @@ public class GeminiService {
     }
 
     /**
-     * Represents an attack decision from the LLM
+     * Represents an attack decision, either from the LLM or the fallback heuristic.
+     * rawResponse holds the full Gemini JSON string for logging/analysis.
+     * isFallback is true when Gemini was unavailable and the heuristic was used.
      */
     public static class AttackDecision {
         public int targetX;
         public int targetY;
         public String reasoning;
+        public String rawResponse;  // full Gemini JSON (null for fallback)
+        public boolean isFallback;  // true when heuristic was used
 
         public AttackDecision(int x, int y, String reasoning) {
             this.targetX = x;
@@ -91,7 +94,7 @@ public class GeminiService {
      * Check if API is currently rate-limited (internal rate limit)
      */
     public boolean isInternallyRateLimited() {
-        return System.currentTimeMillis() - lastCallTime < RATE_LIMIT_MS;
+        return System.currentTimeMillis() - lastCallTime < RunConfig.getInstance().getLlmRateLimitMs();
     }
 
     /**
@@ -101,7 +104,7 @@ public class GeminiService {
             int mapHeight) {
         // Rate limiting check
         long currentTime = System.currentTimeMillis();
-        if (currentTime - lastCallTime < RATE_LIMIT_MS) {
+        if (currentTime - lastCallTime < RunConfig.getInstance().getLlmRateLimitMs()) {
             System.out.println("[GeminiService] Rate limit active, using last cached decision");
             return getDefaultDecision(sentinelPositions, waspPosition);
         }
@@ -152,7 +155,7 @@ public class GeminiService {
 
         // Check rate limit - if not enough time passed, don't prefetch
         long currentTime = System.currentTimeMillis();
-        if (currentTime - lastCallTime < RATE_LIMIT_MS - 1000) { // Start 1s before rate limit expires
+        if (currentTime - lastCallTime < RunConfig.getInstance().getLlmRateLimitMs() - 1000) { // Start 1s before rate limit expires
             return;
         }
 
@@ -251,7 +254,7 @@ public class GeminiService {
         conn.setRequestProperty("Content-Type", "application/json");
         conn.setDoOutput(true);
         conn.setConnectTimeout(10000);
-        conn.setReadTimeout(10000);
+        conn.setReadTimeout(30000);
 
         // Build request body
         JsonObject requestBody = new JsonObject();
@@ -264,6 +267,13 @@ public class GeminiService {
         content.add("parts", parts);
         contents.add(content);
         requestBody.add("contents", contents);
+
+        // Disable thinking mode for faster responses (gemini-2.5-flash defaults to thinking)
+        JsonObject generationConfig = new JsonObject();
+        JsonObject thinkingConfig = new JsonObject();
+        thinkingConfig.addProperty("thinkingBudget", 0);
+        generationConfig.add("thinkingConfig", thinkingConfig);
+        requestBody.add("generationConfig", generationConfig);
 
         // Send request
         try (OutputStream os = conn.getOutputStream()) {
@@ -304,7 +314,6 @@ public class GeminiService {
                 if (partsArr != null && partsArr.size() > 0) {
                     String text = partsArr.get(0).getAsJsonObject().get("text").getAsString();
 
-                    // Parse the structured response
                     int targetX = -1, targetY = -1;
                     String reasoning = "LLM decision";
 
@@ -320,9 +329,11 @@ public class GeminiService {
                     }
 
                     if (targetX >= 0 && targetY >= 0) {
-                        System.out.println("[GeminiService] LLM Strategy - Target: (" + targetX + "," + targetY + ") - "
-                                + reasoning);
-                        return new AttackDecision(targetX, targetY, reasoning);
+                        System.out.println("[GeminiService] LLM Strategy → Target:(" + targetX + "," + targetY + ") " + reasoning);
+                        AttackDecision d = new AttackDecision(targetX, targetY, reasoning);
+                        d.rawResponse = jsonResponse;
+                        d.isFallback  = false;
+                        return d;
                     }
                 }
             }
@@ -330,12 +341,17 @@ public class GeminiService {
             System.err.println("[GeminiService] Parse error: " + e.getMessage());
         }
 
-        return getDefaultDecision(sentinelPositions, waspPosition);
+        AttackDecision fb = getDefaultDecision(sentinelPositions, waspPosition);
+        fb.rawResponse = jsonResponse; // keep raw even when parsing failed
+        return fb;
     }
 
     private int extractNumber(String line) {
         try {
-            String numStr = line.replaceAll("[^0-9]", "");
+            // Extract the first integer token after the colon
+            String afterColon = line.contains(":") ? line.substring(line.indexOf(':') + 1).trim() : line.trim();
+            String numStr = afterColon.replaceAll("[^0-9]", "");
+            if (numStr.isEmpty()) return -1;
             return Integer.parseInt(numStr);
         } catch (Exception e) {
             return -1;
@@ -371,6 +387,8 @@ public class GeminiService {
             }
         }
 
-        return new AttackDecision(bestX, bestY, "Fallback: targeting cluster of " + bestCount);
+        AttackDecision d = new AttackDecision(bestX, bestY, "Fallback: targeting cluster of " + bestCount);
+        d.isFallback = true;
+        return d;
     }
 }

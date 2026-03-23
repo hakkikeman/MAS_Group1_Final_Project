@@ -94,7 +94,6 @@ public class HiveArtifact extends Artifact {
 	void honeyStart(int ammount) {
 		Environment.getInstance().setHoneyStart(ammount);
 		updateObsProperty("honey", ammount);
-		pollenStart(0);
 	}
 
 	@OPERATION

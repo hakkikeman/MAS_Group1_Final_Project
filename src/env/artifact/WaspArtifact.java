@@ -13,404 +13,249 @@ import model.Position;
 import model.Wasp;
 
 /**
- * CArtAgO Artifact for the Wasp agent.
- * Provides operations for hunting sentinels using LLM strategy.
+ * CArtAgO Artifact for the LLM-powered Wasp agent.
+ *
+ * All tunable values (speed, radii, damage) are read from RunConfig so they
+ * can be changed via run-config.properties between experiments without recompiling.
+ * BattleLogger records every significant event for post-run analysis.
  */
 public class WaspArtifact extends Artifact {
 
     private Wasp wasp;
     private GeminiService geminiService;
+    private BattleLogger logger;
+    private RunConfig cfg;
+
     private int targetX = -1;
     private int targetY = -1;
     private String lastReasoning = "";
     private boolean battleActive = true;
 
     void init() {
-        wasp = Wasp.getInstance();
+        wasp         = Wasp.getInstance();
         geminiService = GeminiService.getInstance();
+        logger       = BattleLogger.getInstance();
+        cfg          = RunConfig.getInstance();
 
-        // Observable properties for the agent
         defineObsProperty("wasp_position", wasp.getPosition().getX(), wasp.getPosition().getY());
-        defineObsProperty("wasp_health", wasp.getHealth());
-        defineObsProperty("wasp_alive", wasp.isAlive());
+        defineObsProperty("wasp_health",   wasp.getHealth());
+        defineObsProperty("wasp_alive",    wasp.isAlive());
         defineObsProperty("attack_target", -1, -1, "none");
         defineObsProperty("sentinel_count", 0);
         defineObsProperty("battle_active", true);
 
-        // Start the delayed initialization to wait for JavaFX
         execInternalOp("delayedInit");
     }
 
-    /**
-     * Wait for JavaFX to be ready before registering wasp visually
-     */
+    // ──────────────────────────────────────────────────────────────────────────
+    // Initialisation
+    // ──────────────────────────────────────────────────────────────────────────
+
     @INTERNAL_OPERATION
     void delayedInit() {
-
-        // Wait for the graphics to be ready (queen starts the Map artifact which
-        // launches JavaFX)
-        int maxWaitSeconds = 30;
-        int waited = 0;
-
-        while (waited < maxWaitSeconds) {
+        int maxWait = 30;
+        for (int waited = 0; waited < maxWait; waited++) {
             try {
-                // Check if EnvironmentApplication is ready
                 if (graphic.EnvironmentApplication.getInstance() != null) {
-
-                    // Small additional delay to ensure UI components are initialized
                     await_time(2000);
-
-                    // Now register the wasp
                     Environment.getInstance().registerWasp(wasp);
-
-                    // Start the battle loop
                     execInternalOp("battleLoop");
                     return;
                 }
-            } catch (Exception e) {
-                // JavaFX not ready yet
-            }
-
+            } catch (Exception ignored) {}
             await_time(1000);
-            waited++;
-
         }
-
-        System.err.println("[WaspArtifact] ERROR: JavaFX did not initialize in time! Battle cannot start.");
+        System.err.println("[WaspArtifact] ERROR: JavaFX did not initialise in time.");
     }
 
-    /**
-     * Scan for sentinel positions - updates observable property
-     */
+    // ──────────────────────────────────────────────────────────────────────────
+    // Agent-callable operations (used by wasp.asl)
+    // ──────────────────────────────────────────────────────────────────────────
+
     @OPERATION
     void scanSentinels() {
-        List<Position> sentinelPositions = Environment.getInstance().getSentinelPositions();
-        int count = sentinelPositions.size();
-
-        ObsProperty prop = getObsProperty("sentinel_count");
-        prop.updateValue(count);
-
-        if (count == 0) {
-            System.out.println("[WaspArtifact] No sentinels remaining!");
-            battleActive = false;
-            getObsProperty("battle_active").updateValue(false);
-            Environment.getInstance().declareWaspVictory();
+        List<Position> sentinels = Environment.getInstance().getSentinelPositions();
+        getObsProperty("sentinel_count").updateValue(sentinels.size());
+        if (sentinels.isEmpty()) {
+            endBattle(true);
         }
     }
 
-    /**
-     * Request attack strategy from LLM
-     */
     @OPERATION
     void requestAttackTarget() {
-        if (!wasp.isAlive() || !battleActive) {
-            return;
-        }
+        if (!wasp.isAlive() || !battleActive) return;
 
-        List<Position> sentinelPositions = Environment.getInstance().getSentinelPositions();
-
-        if (sentinelPositions.isEmpty()) {
-            targetX = -1;
-            targetY = -1;
-            lastReasoning = "No targets available";
+        List<Position> sentinels = Environment.getInstance().getSentinelPositions();
+        if (sentinels.isEmpty()) {
+            targetX = -1; targetY = -1; lastReasoning = "No targets";
             updateAttackTarget();
             return;
         }
 
-        // Query LLM for strategy
-        GeminiService.AttackDecision decision = geminiService.getAttackStrategy(
-                sentinelPositions,
-                wasp.getPosition(),
+        GeminiService.AttackDecision d = geminiService.getAttackStrategy(
+                sentinels, wasp.getPosition(),
                 Environment.getInstance().getWidth(),
                 Environment.getInstance().getHeight());
 
-        targetX = decision.targetX;
-        targetY = decision.targetY;
-        lastReasoning = decision.reasoning;
-
-        updateAttackTarget();
-        System.out.println("[WaspArtifact] LLM Target: (" + targetX + ", " + targetY + ") - " + lastReasoning);
+        applyDecision(d, sentinels);
     }
 
-    private void updateAttackTarget() {
-        ObsProperty prop = getObsProperty("attack_target");
-        prop.updateValues(new Object[] { targetX, targetY, lastReasoning });
-    }
-
-    /**
-     * Move wasp toward target position
-     */
     @OPERATION
     void moveToTarget() {
-        if (!wasp.isAlive() || targetX < 0 || targetY < 0) {
-            return;
-        }
-
-        // Move with speed multiplier
-        wasp.moveToward(targetX, targetY, 2);
-
-        // Update position in environment
+        if (!wasp.isAlive() || targetX < 0 || targetY < 0) return;
+        wasp.moveToward(targetX, targetY, cfg.getWaspSpeed());
         Environment.getInstance().updateWaspPosition(wasp.getPosition());
-
-        // Update observable property
-        ObsProperty posProp = getObsProperty("wasp_position");
-        posProp.updateValues(new Object[] { wasp.getPosition().getX(), wasp.getPosition().getY() });
+        getObsProperty("wasp_position").updateValues(
+                new Object[]{wasp.getPosition().getX(), wasp.getPosition().getY()});
     }
 
-    /**
-     * Execute attack at current position
-     */
     @OPERATION
     void executeAttack() {
-        if (!wasp.isAlive()) {
-            return;
+        if (!wasp.isAlive()) return;
+        Position pos = wasp.getPosition();
+        int attackR  = wasp.getAttackRadius();
+        int counterR = cfg.getSentinelCounterRadius();
+        int threshold = cfg.getCounterAttackThreshold();
+        int damage   = cfg.getSentinelCounterDamage();
+
+        List<String> killed = Environment.getInstance()
+                .attackSentinelsInRadius(pos.getX(), pos.getY(), attackR, wasp.getMaxKillsPerAttack());
+        if (!killed.isEmpty()) {
+            int remaining = Environment.getInstance().getSentinelPositions().size();
+            logger.logKills(killed, wasp.getHealth(), pos.getX(), pos.getY(), remaining);
         }
 
-        Position waspPos = wasp.getPosition();
-        int attackRadius = wasp.getAttackRadius();
-        int maxKills = wasp.getMaxKillsPerAttack();
-
-        // Find sentinels within attack radius
-        List<String> killedSentinels = Environment.getInstance().attackSentinelsInRadius(
-                waspPos.getX(), waspPos.getY(), attackRadius, maxKills);
-
-        if (!killedSentinels.isEmpty()) {
-            System.out.println("[WaspArtifact] Killed " + killedSentinels.size() + " sentinels: " + killedSentinels);
-        }
-
-        // Check for counter-attack from nearby sentinels
-        int nearbySentinels = Environment.getInstance().countSentinelsInRadius(
-                waspPos.getX(), waspPos.getY(), attackRadius);
-
-        if (nearbySentinels >= 2) {
-            // Counter-attack! 20 HP damage (10% of 200)
-            System.out.println("[WaspArtifact] COUNTER-ATTACK! " + nearbySentinels + " sentinels attacking!");
-            wasp.takeDamageAmount(20);
-
-            // Update health observable
-            ObsProperty healthProp = getObsProperty("wasp_health");
-            healthProp.updateValue(wasp.getHealth());
-
-            // Update alive status
-            ObsProperty aliveProp = getObsProperty("wasp_alive");
-            aliveProp.updateValue(wasp.isAlive());
-
-            // Update graphic
-            Environment.getInstance().updateWaspHealth(wasp.getHealth(), wasp.getMaxHealth());
-
-            if (!wasp.isAlive()) {
-                battleActive = false;
-                getObsProperty("battle_active").updateValue(false);
-                Environment.getInstance().declareSentinelVictory();
-            }
+        int nearby = Environment.getInstance().countSentinelsInRadius(pos.getX(), pos.getY(), counterR);
+        if (nearby >= threshold) {
+            wasp.takeDamageAmount(damage);
+            logger.logCounterAttack(damage, wasp.getHealth(), pos.getX(), pos.getY(),
+                    Environment.getInstance().getSentinelPositions().size(), nearby);
+            updateWaspHealthUI();
+            if (!wasp.isAlive()) endBattle(false);
         }
     }
 
-    /**
-     * Check if wasp has reached target
-     */
     @OPERATION
     void checkReachedTarget() {
-        if (targetX < 0 || targetY < 0) {
-            return;
-        }
-
-        double distance = wasp.distanceTo(new Position(targetX, targetY));
-        if (distance < 10) {
-            // At target - execute attack
+        if (targetX < 0 || targetY < 0) return;
+        if (wasp.distanceTo(new Position(targetX, targetY)) < 10) {
             signal("at_attack_position");
         }
     }
 
-    /**
-     * Main battle loop - internal operation
-     */
+    // ──────────────────────────────────────────────────────────────────────────
+    // Main battle loop
+    // ──────────────────────────────────────────────────────────────────────────
+
     @INTERNAL_OPERATION
     void battleLoop() {
-        // PHASE 1: Wait for sentinels to register in the system
-        int initialSentinelCount = 0;
-        int waitCycles = 0;
-        int maxWaitCycles = 30; // Max 30 seconds
-
-        while (waitCycles < maxWaitCycles) {
+        // ── Phase 1: wait for sentinels to register ──────────────────────────
+        int initialCount = 0;
+        for (int i = 0; i < 30; i++) {
             await_time(1000);
-            waitCycles++;
-
-            List<Position> sentinels = Environment.getInstance().getSentinelPositions();
-            initialSentinelCount = sentinels.size();
-
-            if (initialSentinelCount > 0) {
-                // Wait extra time for all sentinels to register
-                await_time(2000);
-                sentinels = Environment.getInstance().getSentinelPositions();
-                initialSentinelCount = sentinels.size();
+            List<Position> s = Environment.getInstance().getSentinelPositions();
+            if (!s.isEmpty()) {
+                await_time(2000); // extra time for all agents to register
+                initialCount = Environment.getInstance().getSentinelPositions().size();
                 break;
             }
         }
 
-        if (initialSentinelCount == 0) {
-            System.err.println("[WaspArtifact] ERROR: No sentinels found after waiting! Battle cannot start.");
+        if (initialCount == 0) {
+            System.err.println("[WaspArtifact] No sentinels found. Battle aborted.");
             return;
         }
 
-        System.out.println("[WaspArtifact] ===== BATTLE BEGINS: Wasp vs " + initialSentinelCount + " Sentinels! =====");
+        logger.logBattleStart(initialCount, wasp.getHealth());
+        System.out.println("[WaspArtifact] ===== BATTLE BEGINS: Wasp vs " + initialCount + " Sentinels =====");
 
-        // Track that battle has properly started
-        boolean battleProperlyStarted = true;
+        // ── Phase 2: main battle loop ────────────────────────────────────────
+        int attackR  = wasp.getAttackRadius();
+        int counterR = cfg.getSentinelCounterRadius();
+        int threshold = cfg.getCounterAttackThreshold();
+        int damage   = cfg.getSentinelCounterDamage();
+        int speed    = cfg.getWaspSpeed();
 
-        // PHASE 2: Main battle loop
         while (battleActive && wasp.isAlive()) {
-            // === MINIMAL BATTLE CHECK (50ms) ===
-            // Minimal wait - just one quick check before getting next target
-            // Movement loop handles all battle mechanics anyway
-            int maxWaitSteps = 1; // 1 * 50ms = 50ms (minimum for thread sync)
 
-            for (int waitStep = 0; waitStep < maxWaitSteps && wasp.isAlive(); waitStep++) {
-                await_time(50);
+            // Brief idle check (50 ms)
+            await_time(50);
+            if (!doIdleCheck(attackR, counterR, threshold, damage)) break;
+            if (!wasp.isAlive() || !battleActive) break;
 
-                Position waspPos = wasp.getPosition();
-                int waspAttackRadius = 50;
-                int sentinelCounterRadius = 100;
-
-                int nearbyForAttack = Environment.getInstance().countSentinelsInRadius(
-                        waspPos.getX(), waspPos.getY(), waspAttackRadius);
-                int allWithin100px = Environment.getInstance().countSentinelsInRadius(
-                        waspPos.getX(), waspPos.getY(), sentinelCounterRadius);
-
-                // WASP ATTACK: Kill 1 or 2 sentinels within 50px (during wait phase)
-                if ((nearbyForAttack == 1 || nearbyForAttack == 2)) {
-                    List<String> killed = Environment.getInstance().attackSentinelsInRadius(
-                            waspPos.getX(), waspPos.getY(), waspAttackRadius, 2);
-                    if (!killed.isEmpty()) {
-                        System.out.println("[WaspArtifact] *** IDLE ATTACK! Killed " + killed.size() + " sentinel(s)");
-                    }
-                }
-
-                // SENTINEL COUNTER-ATTACK: 2+ sentinels within 100px (during wait phase)
-                if (allWithin100px >= 2 && waitStep % 10 == 0) { // Every 500ms
-                    System.out.println(
-                            "[WaspArtifact] COUNTER-ATTACK during wait! " + allWithin100px + " sentinels nearby!");
-                    wasp.takeDamage(10);
-                    updateWaspHealthUI();
-
-                    if (!wasp.isAlive()) {
-                        battleActive = false;
-                        getObsProperty("battle_active").updateValue(false);
-                        Environment.getInstance().declareSentinelVictory();
-                        break;
-                    }
-                }
-            }
-
-            if (!wasp.isAlive())
-                break;
-
-            // Scan for sentinels
+            // ── Refresh sentinel list ────────────────────────────────────────
             List<Position> sentinels = Environment.getInstance().getSentinelPositions();
-            ObsProperty countProp = getObsProperty("sentinel_count");
-            countProp.updateValue(sentinels.size());
+            getObsProperty("sentinel_count").updateValue(sentinels.size());
 
-            // Only declare victory if battle properly started AND no sentinels remain
-            if (sentinels.isEmpty() && battleProperlyStarted) {
-                System.out.println("[WaspArtifact] All sentinels eliminated! Wasp wins!");
-                battleActive = false;
-                getObsProperty("battle_active").updateValue(false);
-                Environment.getInstance().declareWaspVictory();
+            if (sentinels.isEmpty()) {
+                endBattle(true);
                 break;
             }
 
-            // === OPTIMIZED LLM STRATEGY: Use prefetch if available ===
+            // ── LLM / heuristic decision ─────────────────────────────────────
             GeminiService.AttackDecision decision = geminiService.getPrefetchedDecision();
-
             if (decision == null) {
-                // No prefetch ready - get synchronously (first iteration or fallback)
                 decision = geminiService.getAttackStrategy(
-                        sentinels,
-                        wasp.getPosition(),
+                        sentinels, wasp.getPosition(),
                         Environment.getInstance().getWidth(),
                         Environment.getInstance().getHeight());
             } else {
-                System.out.println("[WaspArtifact] Using prefetched target - NO WAIT!");
+                System.out.println("[WaspArtifact] Using prefetched target – no LLM wait.");
             }
 
-            targetX = decision.targetX;
-            targetY = decision.targetY;
-            lastReasoning = decision.reasoning;
-            updateAttackTarget();
+            applyDecision(decision, sentinels);
 
-            // Calculate initial distance for prefetch trigger
-            double initialDistance = wasp.distanceTo(new Position(targetX, targetY));
+            // ── Move toward target ────────────────────────────────────────────
+            double initDist = wasp.distanceTo(new Position(targetX, targetY));
             boolean prefetchStarted = false;
-
-            // Move toward target - FASTER battle loop
             int steps = 0;
-            int counterAttackCooldown = 0;
-            int waspAttackCooldown = 0; // New cooldown for Wasp attacks
+            int counterCd = 0;
+            int attackCd  = 0;
 
-            while (wasp.distanceTo(new Position(targetX, targetY)) > 20 && steps < 100 && wasp.isAlive()) {
-                wasp.moveToward(targetX, targetY, 3); // Original speed
+            while (wasp.distanceTo(new Position(targetX, targetY)) > 20
+                    && steps < 150 && wasp.isAlive()) {
+
+                wasp.moveToward(targetX, targetY, speed);
                 Environment.getInstance().updateWaspPosition(wasp.getPosition());
+                getObsProperty("wasp_position").updateValues(
+                        new Object[]{wasp.getPosition().getX(), wasp.getPosition().getY()});
 
-                ObsProperty posProp = getObsProperty("wasp_position");
-                posProp.updateValues(new Object[] { wasp.getPosition().getX(), wasp.getPosition().getY() });
-
-                await_time(50); // 50ms - fast reaction
+                await_time(50);
                 steps++;
-                counterAttackCooldown++;
-                waspAttackCooldown++;
+                counterCd++;
+                attackCd++;
 
-                Position waspPos = wasp.getPosition();
+                Position pos = wasp.getPosition();
+                int near50  = Environment.getInstance().countSentinelsInRadius(pos.getX(), pos.getY(), attackR);
+                int near100 = Environment.getInstance().countSentinelsInRadius(pos.getX(), pos.getY(), counterR);
 
-                // === BATTLE MECHANICS ===
-                // Wasp attack radius = 50px (kills 1-2 sentinels)
-                int waspAttackRadius = 50;
-                // Sentinel counter-attack range = 100px (3+ sentinels deal damage)
-                int sentinelCounterRadius = 100;
-
-                // Count sentinels in Wasp's attack range (0-50px)
-                int nearbyForAttack = Environment.getInstance().countSentinelsInRadius(
-                        waspPos.getX(), waspPos.getY(), waspAttackRadius);
-
-                // Count ALL sentinels within 100px for counter-attack check
-                int allWithin100px = Environment.getInstance().countSentinelsInRadius(
-                        waspPos.getX(), waspPos.getY(), sentinelCounterRadius);
-
-                // WASP ATTACK: Kill 1 or 2 sentinels within 50px range
-                if ((nearbyForAttack == 1 || nearbyForAttack == 2) && waspAttackCooldown >= 10) {
-                    waspAttackCooldown = 0; // Reset cooldown
-
-                    List<String> killed = Environment.getInstance().attackSentinelsInRadius(
-                            waspPos.getX(), waspPos.getY(), waspAttackRadius, 2); // Max 2 kills
+                // Wasp attacks isolated or paired sentinels
+                if (near50 >= 1 && near50 <= 2 && attackCd >= 10) {
+                    attackCd = 0;
+                    List<String> killed = Environment.getInstance()
+                            .attackSentinelsInRadius(pos.getX(), pos.getY(), attackR, wasp.getMaxKillsPerAttack());
                     if (!killed.isEmpty()) {
-                        System.out.println(
-                                "[WaspArtifact] *** ATTACK! Killed " + killed.size() + " sentinel(s): " + killed);
+                        int remaining = Environment.getInstance().getSentinelPositions().size();
+                        logger.logKills(killed, wasp.getHealth(), pos.getX(), pos.getY(), remaining);
                     }
                 }
 
-                // SENTINEL COUNTER-ATTACK: 2+ sentinels anywhere within 100px deal damage
-                // This includes sentinels IN the 50px zone - if 2+ are nearby, they fight back!
-                if (allWithin100px >= 2 && counterAttackCooldown >= 20) {
-                    System.out.println(
-                            "[WaspArtifact] COUNTER-ATTACK! " + allWithin100px + " sentinels within 100px!");
-                    wasp.takeDamageAmount(20); // 20 damage (10%)
+                // Sentinel counter-attack (every ~1 s, cooldown 20 steps × 50 ms)
+                if (near100 >= threshold && counterCd >= 20) {
+                    counterCd = 0;
+                    wasp.takeDamageAmount(damage);
+                    logger.logCounterAttack(damage, wasp.getHealth(),
+                            pos.getX(), pos.getY(),
+                            Environment.getInstance().getSentinelPositions().size(), near100);
                     updateWaspHealthUI();
-                    counterAttackCooldown = 0;
-
-                    if (!wasp.isAlive()) {
-                        battleActive = false;
-                        getObsProperty("battle_active").updateValue(false);
-                        Environment.getInstance().declareSentinelVictory();
-                        break;
-                    }
+                    if (!wasp.isAlive()) { endBattle(false); break; }
                 }
 
-                // === PREFETCH TRIGGER: Start LLM query at 50% distance ===
-                double remainingDistance = wasp.distanceTo(new Position(targetX, targetY));
-                if (!prefetchStarted && remainingDistance < initialDistance * 0.5) {
-                    // Refresh sentinel positions for prefetch
-                    List<Position> currentSentinels = Environment.getInstance().getSentinelPositions();
+                // Start prefetching next LLM decision when halfway to target
+                double remaining = wasp.distanceTo(new Position(targetX, targetY));
+                if (!prefetchStarted && remaining < initDist * 0.5) {
                     geminiService.prefetchNextStrategy(
-                            currentSentinels,
+                            Environment.getInstance().getSentinelPositions(),
                             wasp.getPosition(),
                             Environment.getInstance().getWidth(),
                             Environment.getInstance().getHeight());
@@ -418,39 +263,87 @@ public class WaspArtifact extends Artifact {
                 }
             }
 
-            if (!wasp.isAlive())
-                break;
+            if (!wasp.isAlive()) break;
 
-            // Final attack at target location
-            Position waspPos = wasp.getPosition();
-            int nearbyCount = Environment.getInstance().countSentinelsInRadius(
-                    waspPos.getX(), waspPos.getY(), wasp.getAttackRadius());
-
-            if (nearbyCount == 1) {
-                List<String> killed = Environment.getInstance().attackSentinelsInRadius(
-                        waspPos.getX(), waspPos.getY(), wasp.getAttackRadius(), wasp.getMaxKillsPerAttack());
-
+            // ── Final attack at target location ───────────────────────────────
+            Position pos = wasp.getPosition();
+            int nearby = Environment.getInstance().countSentinelsInRadius(pos.getX(), pos.getY(), attackR);
+            if (nearby >= 1) {
+                List<String> killed = Environment.getInstance()
+                        .attackSentinelsInRadius(pos.getX(), pos.getY(), attackR, wasp.getMaxKillsPerAttack());
                 if (!killed.isEmpty()) {
-                    System.out.println(
-                            "[WaspArtifact] *** ATTACK SUCCESS! Killed " + killed.size() + " sentinels: " + killed);
+                    int rem = Environment.getInstance().getSentinelPositions().size();
+                    logger.logKills(killed, wasp.getHealth(), pos.getX(), pos.getY(), rem);
                 }
-            } else if (nearbyCount >= 2) {
-                System.out.println("[WaspArtifact] Too many bees! Taking damage and retreating...");
-            } else {
-                System.out.println("[WaspArtifact] No targets. Moving to next location...");
             }
         }
 
         System.out.println("[WaspArtifact] Battle loop ended. Wasp alive: " + wasp.isAlive());
     }
 
+    // ──────────────────────────────────────────────────────────────────────────
+    // Private helpers
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /** Apply a Gemini/fallback decision, log it, update observable properties. */
+    private void applyDecision(GeminiService.AttackDecision d, List<Position> sentinels) {
+        targetX = d.targetX;
+        targetY = d.targetY;
+        lastReasoning = d.reasoning;
+        updateAttackTarget();
+
+        logger.logLlmDecision(
+                wasp.getPosition(), sentinels,
+                d.rawResponse, d.targetX, d.targetY, d.reasoning,
+                d.isFallback);
+    }
+
+    /** Quick idle check between decision cycles. Returns false if battle ended. */
+    private boolean doIdleCheck(int attackR, int counterR, int threshold, int damage) {
+        Position pos = wasp.getPosition();
+        int near50  = Environment.getInstance().countSentinelsInRadius(pos.getX(), pos.getY(), attackR);
+        int near100 = Environment.getInstance().countSentinelsInRadius(pos.getX(), pos.getY(), counterR);
+
+        if (near50 >= 1 && near50 <= 2) {
+            List<String> killed = Environment.getInstance()
+                    .attackSentinelsInRadius(pos.getX(), pos.getY(), attackR, wasp.getMaxKillsPerAttack());
+            if (!killed.isEmpty()) {
+                int rem = Environment.getInstance().getSentinelPositions().size();
+                logger.logKills(killed, wasp.getHealth(), pos.getX(), pos.getY(), rem);
+            }
+        }
+
+        if (near100 >= threshold) {
+            wasp.takeDamage(10); // percentage-based idle damage
+            updateWaspHealthUI();
+            if (!wasp.isAlive()) { endBattle(false); return false; }
+        }
+        return true;
+    }
+
+    private void endBattle(boolean waspWon) {
+        if (!battleActive) return; // guard against double-call
+        battleActive = false;
+        getObsProperty("battle_active").updateValue(false);
+
+        int remaining = Environment.getInstance().getSentinelPositions().size();
+        logger.logBattleEnd(waspWon, wasp.getHealth(), remaining);
+
+        if (waspWon) {
+            System.out.println("[WaspArtifact] All sentinels eliminated! Wasp wins!");
+            Environment.getInstance().declareWaspVictory();
+        } else {
+            Environment.getInstance().declareSentinelVictory();
+        }
+    }
+
+    private void updateAttackTarget() {
+        getObsProperty("attack_target").updateValues(new Object[]{targetX, targetY, lastReasoning});
+    }
+
     private void updateWaspHealthUI() {
-        ObsProperty healthProp = getObsProperty("wasp_health");
-        healthProp.updateValue(wasp.getHealth());
-
-        ObsProperty aliveProp = getObsProperty("wasp_alive");
-        aliveProp.updateValue(wasp.isAlive());
-
+        getObsProperty("wasp_health").updateValue(wasp.getHealth());
+        getObsProperty("wasp_alive").updateValue(wasp.isAlive());
         Environment.getInstance().updateWaspHealth(wasp.getHealth(), wasp.getMaxHealth());
     }
 }

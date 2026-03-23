@@ -140,10 +140,7 @@ public class Hive {
 	public Bee createBee(String beeId, String role) {
 		BeeRole beeRole = BeeRole.valueOf(role);
 		Bee bee = new Bee(beeId, beeRole);
-		;
-
 		addBeeRole(beeRole, bee);
-
 		return bee;
 	}
 
