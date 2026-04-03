@@ -1,0 +1,46 @@
+{
+  "run_id": "20260403_115253",
+  "outcome": "SENTINEL_WIN",
+  "battle_duration_ms": 44335,
+  "config": {
+    "run_label": "no_llm",
+    "wasp_health": 200,
+    "wasp_attack_radius": 50,
+    "wasp_max_kills": 2,
+    "wasp_speed": 3,
+    "sentinel_counter_radius": 100,
+    "sentinel_counter_damage": 20,
+    "counter_attack_threshold": 2,
+    "auto_exit": true,
+    "llm_enabled": false,
+    "llm_rate_limit_ms": 3000
+  },
+  "stats": {
+    "initial_sentinels": 20,
+    "sentinels_killed": 13,
+    "remaining_sentinels": 9,
+    "wasp_final_health": 0,
+    "wasp_max_health": 200,
+    "counter_attacks_received": 10,
+    "total_damage_taken": 200,
+    "total_llm_calls": 5,
+    "llm_safe_choices": 0,
+    "llm_dangerous_choices": 5,
+    "llm_fallback_decisions": 5,
+    "llm_safe_choice_pct": 0.0
+  },
+  "temporal_analysis": {
+    "first_half_safe": 0,
+    "first_half_total": 2,
+    "second_half_safe": 0,
+    "second_half_total": 3,
+    "strategy_trend": "STABLE"
+  },
+  "llm_reasoning_log": [
+    "Fallback: targeting cluster of 3",
+    "Fallback: targeting cluster of 2",
+    "Fallback: targeting cluster of 2",
+    "Fallback: targeting cluster of 2",
+    "Fallback: targeting cluster of 2"
+  ]
+}

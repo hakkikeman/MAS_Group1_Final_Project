@@ -1,0 +1,61 @@
+{
+  "run_id": "20260323_151104",
+  "outcome": "WASP_WIN",
+  "battle_duration_ms": 104373,
+  "config": {
+    "run_label": "strong_wasp",
+    "wasp_health": 350,
+    "wasp_attack_radius": 70,
+    "wasp_max_kills": 3,
+    "wasp_speed": 5,
+    "sentinel_counter_radius": 100,
+    "sentinel_counter_damage": 20,
+    "counter_attack_threshold": 2,
+    "llm_rate_limit_ms": 5000
+  },
+  "stats": {
+    "initial_sentinels": 20,
+    "sentinels_killed": 28,
+    "remaining_sentinels": 0,
+    "wasp_final_health": 135,
+    "wasp_max_health": 350,
+    "counter_attacks_received": 9,
+    "total_damage_taken": 180,
+    "total_llm_calls": 22,
+    "llm_safe_choices": 15,
+    "llm_dangerous_choices": 7,
+    "llm_fallback_decisions": 10,
+    "llm_safe_choice_pct": 68.2
+  },
+  "temporal_analysis": {
+    "first_half_safe": 4,
+    "first_half_total": 11,
+    "second_half_safe": 11,
+    "second_half_total": 11,
+    "strategy_trend": "IMPROVING"
+  },
+  "llm_reasoning_log": [
+    "Sentinel 9 is isolated from all other sentinels and far from the hive, making it a safe and efficient target.",
+    "Sentinel 2 is isolated, within attack range, and outside the hive area, making it a safe and efficient target.",
+    "Sentinel 2 is the only isolated target outside the hive, with no other sentinels within 100px.",
+    "Fallback: targeting cluster of 3",
+    "Sentinel 4 is isolated for a safe kill and outside the hive area.",
+    "Fallback: targeting cluster of 3",
+    "Fallback: targeting cluster of 3",
+    "Sentinel 2 is isolated and far from the hive, allowing a safe kill without counter-attack risk.",
+    "Sentinel 12 is isolated and far from the hive, allowing a safe kill without counter-attack.",
+    "Sentinel 7 is isolated and outside the hive area, allowing a safe kill without counter-attack.",
+    "Fallback: targeting cluster of 2",
+    "Sentinel 1 is isolated and outside the hive, providing a safe kill opportunity.",
+    "Sentinel 2 is isolated, within attack range, and outside the hive area, making it a safe and efficient target.",
+    "Sentinel 2 is isolated and within safe attack range, while Sentinel 1 is far enough not to pose a threat.",
+    "Fallback: targeting cluster of 1",
+    "Fallback: targeting cluster of 1",
+    "Sentinel 1 is isolated (no other sentinels within 100px) and outside the hive, making it a safe and efficient target.",
+    "Fallback: targeting cluster of 1",
+    "Sentinel 1 is isolated, within attack range from its position, and outside the hive area.",
+    "Fallback: targeting cluster of 1",
+    "Fallback: targeting cluster of 1",
+    "Fallback: targeting cluster of 1"
+  ]
+}
