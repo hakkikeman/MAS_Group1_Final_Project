@@ -45,10 +45,15 @@ public class RunConfig {
     public int getCounterAttackThreshold()   { return getInt("sentinel.counter.threshold", 2); }
 
     // ── LLM ───────────────────────────────────────────────────────────────────
-    public long getLlmRateLimitMs() { return getLong("llm.rate.limit.ms", 5000); }
+    public boolean isLlmEnabled()    { return getBool("llm.enabled", true); }
+    public long getLlmRateLimitMs()  { return getLong("llm.rate.limit.ms", 5000); }
 
     // ── Meta ──────────────────────────────────────────────────────────────────
     public String getRunLabel() { return props.getProperty("run.label", "default"); }
+    /** When true, the JVM exits automatically a few seconds after battle ends (for sweeps). */
+    public boolean isAutoExitEnabled() { return getBool("auto.exit", false); }
+    /** Delay in ms before auto-exit (gives time for logs to flush). */
+    public int getAutoExitDelayMs()    { return getInt("auto.exit.delay.ms", 3000); }
 
     /** Returns all config values as an ordered map suitable for JSON serialisation. */
     public Map<String, Object> asMap() {
@@ -61,6 +66,8 @@ public class RunConfig {
         m.put("sentinel_counter_radius",  getSentinelCounterRadius());
         m.put("sentinel_counter_damage",  getSentinelCounterDamage());
         m.put("counter_attack_threshold", getCounterAttackThreshold());
+        m.put("auto_exit",                isAutoExitEnabled());
+        m.put("llm_enabled",              isLlmEnabled());
         m.put("llm_rate_limit_ms",        getLlmRateLimitMs());
         return m;
     }
@@ -74,5 +81,11 @@ public class RunConfig {
     private long getLong(String key, long def) {
         try { return Long.parseLong(props.getProperty(key, String.valueOf(def)).trim()); }
         catch (NumberFormatException e) { return def; }
+    }
+
+    private boolean getBool(String key, boolean def) {
+        String val = props.getProperty(key);
+        if (val == null) return def;
+        return Boolean.parseBoolean(val.trim());
     }
 }

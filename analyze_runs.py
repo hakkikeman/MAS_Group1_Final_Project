@@ -15,13 +15,23 @@ Reads all log files produced by BattleLogger and answers three article questions
 Usage:
   python analyze_runs.py              # reads from ./logs/
   python analyze_runs.py path/to/logs
+  python analyze_runs.py --charts     # also generate matplotlib figures in ./charts/
 """
 
+import argparse
 import json
 import os
 import sys
 import glob
 from collections import defaultdict
+
+try:
+    import matplotlib
+    matplotlib.use("Agg")  # non-interactive backend
+    import matplotlib.pyplot as plt
+    HAS_MPL = True
+except ImportError:
+    HAS_MPL = False
 
 SEP  = "=" * 90
 SEP2 = "-" * 90
@@ -259,8 +269,107 @@ def print_config_comparison(summaries):
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Chart generation (requires matplotlib)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def generate_charts(summaries, llm_logs, out_dir="charts"):
+    if not HAS_MPL:
+        print("  [warn] matplotlib not installed – skipping charts.  pip install matplotlib")
+        return
+    os.makedirs(out_dir, exist_ok=True)
+
+    labels = []
+    safe_pcts_1st = []
+    safe_pcts_2nd = []
+    kills_list = []
+    damage_list = []
+
+    for s in summaries:
+        cfg = s.get("config", {})
+        st  = s.get("stats", {})
+        label = cfg.get("run_label", "?")
+        labels.append(label)
+
+        kills_list.append(st.get("sentinels_killed", 0))
+        damage_list.append(st.get("total_damage_taken", 0))
+
+        ta = s.get("temporal_analysis", {})
+        f_total = ta.get("first_half_total", 0)
+        s_total = ta.get("second_half_total", 0)
+        f_safe  = ta.get("first_half_safe", 0)
+        s_safe  = ta.get("second_half_safe", 0)
+        safe_pcts_1st.append(100 * f_safe / f_total if f_total else 0)
+        safe_pcts_2nd.append(100 * s_safe / s_total if s_total else 0)
+
+    x = range(len(labels))
+
+    # ── Chart 1: Safe% per config (first half vs second half) ─────────────
+    fig, ax = plt.subplots(figsize=(8, 5))
+    w = 0.35
+    ax.bar([i - w/2 for i in x], safe_pcts_1st, w, label="First half", color="#4C72B0")
+    ax.bar([i + w/2 for i in x], safe_pcts_2nd, w, label="Second half", color="#55A868")
+    ax.set_ylabel("Safe decisions (%)")
+    ax.set_title("LLM Decision Safety — First vs Second Half")
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(labels, rotation=15)
+    ax.set_ylim(0, 110)
+    ax.legend()
+    ax.grid(axis="y", alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(os.path.join(out_dir, "safe_pct_by_config.png"), dpi=150)
+    plt.close(fig)
+    print(f"  Saved: {out_dir}/safe_pct_by_config.png")
+
+    # ── Chart 2: Kills and damage per config ──────────────────────────────
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.bar([i - w/2 for i in x], kills_list, w, label="Sentinels killed", color="#C44E52")
+    ax.bar([i + w/2 for i in x], damage_list, w, label="Damage taken", color="#8172B2")
+    ax.set_ylabel("Count / HP")
+    ax.set_title("Kills and Damage Taken per Configuration")
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(labels, rotation=15)
+    ax.legend()
+    ax.grid(axis="y", alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(os.path.join(out_dir, "kills_damage_by_config.png"), dpi=150)
+    plt.close(fig)
+    print(f"  Saved: {out_dir}/kills_damage_by_config.png")
+
+    # ── Chart 3: Safe rate over decision index (longest run) ──────────────
+    # Pick the run with the most decisions
+    if llm_logs:
+        best_run = max(llm_logs.items(), key=lambda kv: len(kv[1]))
+        run_id, decisions = best_run
+        if len(decisions) >= 4:
+            indices = list(range(1, len(decisions) + 1))
+            cumulative_safe = []
+            safe_so_far = 0
+            for i, d in enumerate(decisions):
+                if d.get("is_safe_choice"):
+                    safe_so_far += 1
+                cumulative_safe.append(100 * safe_so_far / (i + 1))
+
+            fig, ax = plt.subplots(figsize=(9, 5))
+            ax.plot(indices, cumulative_safe, "o-", color="#4C72B0", linewidth=2, markersize=6)
+            ax.set_xlabel("Decision index")
+            ax.set_ylabel("Cumulative safe rate (%)")
+            ax.set_title(f"Strategy Evolution — {run_id}")
+            ax.set_ylim(0, 110)
+            ax.grid(alpha=0.3)
+            fig.tight_layout()
+            fig.savefig(os.path.join(out_dir, "strategy_evolution.png"), dpi=150)
+            plt.close(fig)
+            print(f"  Saved: {out_dir}/strategy_evolution.png")
+
+
 def main():
-    logs_dir = sys.argv[1] if len(sys.argv) > 1 else "logs"
+    parser = argparse.ArgumentParser(description="Analyze Multi-Agent Bee Colony LLM experiment runs")
+    parser.add_argument("logs_dir", nargs="?", default="logs", help="Path to logs directory")
+    parser.add_argument("--charts", action="store_true", help="Generate matplotlib charts in ./charts/")
+    args = parser.parse_args()
+
+    logs_dir = args.logs_dir
 
     if not os.path.isdir(logs_dir):
         print(f"[error] Logs directory not found: {logs_dir}")
@@ -278,10 +387,18 @@ def main():
     print_strategy_evolution(llm_logs, summaries)
     print_config_comparison(summaries)
 
+    if args.charts:
+        print(f"\n{SEP}")
+        print("  GENERATING CHARTS")
+        print(SEP)
+        generate_charts(summaries, llm_logs)
+
     print(f"\n{SEP}")
     print("  Analysis complete.")
     print(f"  Raw LLM responses are in: logs/*_llm.jsonl")
     print(f"  Full summaries are in   : logs/*_summary.json")
+    if args.charts and HAS_MPL:
+        print(f"  Charts saved to         : charts/")
     print(SEP)
 
 

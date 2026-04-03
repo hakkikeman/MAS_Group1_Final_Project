@@ -115,7 +115,7 @@ public class BattleLogger {
      * @param reasoning         short reasoning string extracted from LLM response
      * @param isFallback        true if Gemini was unavailable and heuristic was used
      */
-    public synchronized void logLlmDecision(
+    public synchronized boolean logLlmDecision(
             Position waspPos,
             List<Position> sentinelPositions,
             String rawResponse,
@@ -146,7 +146,7 @@ public class BattleLogger {
             System.out.println("[BattleLogger]   ⚠ OVERCONFIDENT CHOICE – counter-attack risk!");
 
         // ── Write JSONL record ────────────────────────────────────────────────
-        if (llmWriter == null) return;
+        if (llmWriter == null) return isSafe;
 
         JsonObject entry = new JsonObject();
         entry.addProperty("run_id",      runId);
@@ -190,6 +190,7 @@ public class BattleLogger {
                       + " fallback=" + isFallback;
         writeEvent("LLM_DECISION", -1, waspPos.getX(), waspPos.getY(),
                    sentinelPositions.size(), detail);
+        return isSafe;
     }
 
     /** Call when wasp kills one or more sentinels. */

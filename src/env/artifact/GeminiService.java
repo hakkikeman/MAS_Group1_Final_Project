@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
@@ -31,6 +32,35 @@ public class GeminiService {
     private volatile AttackDecision prefetchedDecision = null;
     private volatile boolean prefetchInProgress = false;
     private AttackDecision lastValidDecision = null;
+
+    // Decision memory — rolling history of last N decisions for prompt context
+    private static final int MAX_DECISION_HISTORY = 5;
+    private final List<DecisionRecord> decisionHistory = new ArrayList<>();
+
+    /** Lightweight record of a past decision and its ground-truth outcome. */
+    public static class DecisionRecord {
+        public final int targetX;
+        public final int targetY;
+        public final boolean wasSafe;
+        public final int damageTaken; // 0 if safe
+
+        public DecisionRecord(int targetX, int targetY, boolean wasSafe, int damageTaken) {
+            this.targetX = targetX;
+            this.targetY = targetY;
+            this.wasSafe = wasSafe;
+            this.damageTaken = damageTaken;
+        }
+    }
+
+    /** Called by WaspArtifact after each decision's outcome is known. */
+    public void recordDecisionOutcome(int targetX, int targetY, boolean wasSafe, int damageTaken) {
+        synchronized (decisionHistory) {
+            decisionHistory.add(new DecisionRecord(targetX, targetY, wasSafe, damageTaken));
+            if (decisionHistory.size() > MAX_DECISION_HISTORY) {
+                decisionHistory.remove(0);
+            }
+        }
+    }
 
     private GeminiService() {
         loadApiKey();
@@ -101,7 +131,12 @@ public class GeminiService {
      * Query the LLM for optimal attack strategy based on sentinel positions
      */
     public AttackDecision getAttackStrategy(List<Position> sentinelPositions, Position waspPosition, int mapWidth,
-            int mapHeight) {
+            int mapHeight, int waspHealth, int waspMaxHealth) {
+        // LLM disabled — always use heuristic
+        if (!RunConfig.getInstance().isLlmEnabled()) {
+            return getDefaultDecision(sentinelPositions, waspPosition);
+        }
+
         // Rate limiting check
         long currentTime = System.currentTimeMillis();
         if (currentTime - lastCallTime < RunConfig.getInstance().getLlmRateLimitMs()) {
@@ -116,7 +151,7 @@ public class GeminiService {
         }
 
         try {
-            String prompt = buildPrompt(sentinelPositions, waspPosition, mapWidth, mapHeight);
+            String prompt = buildPrompt(sentinelPositions, waspPosition, mapWidth, mapHeight, waspHealth, waspMaxHealth);
             String response = callGeminiAPI(prompt);
             return parseResponse(response, sentinelPositions, waspPosition);
         } catch (Exception e) {
@@ -147,7 +182,12 @@ public class GeminiService {
      * Call this while Wasp is moving to eliminate wait time.
      */
     public void prefetchNextStrategy(List<Position> sentinelPositions, Position waspPosition,
-            int mapWidth, int mapHeight) {
+            int mapWidth, int mapHeight, int waspHealth, int waspMaxHealth) {
+        // Don't prefetch if LLM is disabled
+        if (!RunConfig.getInstance().isLlmEnabled()) {
+            return;
+        }
+
         // Don't start new prefetch if one is already in progress
         if (prefetchInProgress) {
             return;
@@ -164,7 +204,7 @@ public class GeminiService {
 
         Thread prefetchThread = new Thread(() -> {
             try {
-                AttackDecision decision = getAttackStrategy(sentinelPositions, waspPosition, mapWidth, mapHeight);
+                AttackDecision decision = getAttackStrategy(sentinelPositions, waspPosition, mapWidth, mapHeight, waspHealth, waspMaxHealth);
                 prefetchedDecision = decision;
                 lastValidDecision = decision;
                 System.out.println(
@@ -214,19 +254,32 @@ public class GeminiService {
         return lastValidDecision;
     }
 
-    private String buildPrompt(List<Position> sentinelPositions, Position waspPosition, int mapWidth, int mapHeight) {
+    private String buildPrompt(List<Position> sentinelPositions, Position waspPosition,
+                               int mapWidth, int mapHeight,
+                               int waspHealth, int waspMaxHealth) {
+        RunConfig cfg = RunConfig.getInstance();
+        int attackR   = cfg.getWaspAttackRadius();
+        int maxKills  = cfg.getWaspMaxKills();
+        int counterR  = cfg.getSentinelCounterRadius();
+        int threshold = cfg.getCounterAttackThreshold();
+        int counterDmg = cfg.getSentinelCounterDamage();
+        int healthPct = waspMaxHealth > 0 ? (100 * waspHealth / waspMaxHealth) : 0;
+
         StringBuilder sb = new StringBuilder();
         sb.append("You are an AI controlling a wasp predator in a beehive simulation game. ");
-        sb.append("Your goal is to hunt sentinel bees efficiently.\n\n");
+        sb.append("Your goal is to hunt and eliminate sentinel bees while surviving as long as possible.\n\n");
+
         sb.append("GAME RULES:\n");
-        sb.append("- ATTACK: You can kill 1 or 2 sentinels if they are within 50px of you\n");
-        sb.append("- DANGER: If 2+ sentinels are within 100px, they will counter-attack and damage you\n");
-        sb.append("- STRATEGY: Target isolated sentinels (exactly 1 alone), avoid groups of 2+\n");
-        sb.append("- Map size: " + mapWidth + "x" + mapHeight + "\n");
-        sb.append("- Hive location is at bottom-right area (around 649-799x, 449-599y) - avoid entering!\n\n");
+        sb.append("- ATTACK: You can kill up to " + maxKills + " sentinel(s) if they are within " + attackR + "px of your position\n");
+        sb.append("- DANGER: If " + threshold + " or more sentinels are within " + counterR + "px of you, they will counter-attack and deal " + counterDmg + " HP damage to you\n");
+        sb.append("- STRATEGY: Target isolated sentinels — ideally exactly 1 within your " + attackR + "px attack range, with fewer than " + threshold + " within the " + counterR + "px danger zone\n");
+        sb.append("- Map size: " + mapWidth + "x" + mapHeight + " pixels\n");
+        sb.append("- The beehive is located at the bottom-right area (approximately 649-799 x, 449-599 y) — you cannot enter the hive\n\n");
 
         sb.append("CURRENT STATE:\n");
         sb.append("- Your position: (" + waspPosition.getX() + ", " + waspPosition.getY() + ")\n");
+        sb.append("- Your health: " + waspHealth + "/" + waspMaxHealth + " HP (" + healthPct + "% remaining)\n");
+        sb.append("- Sentinels remaining: " + sentinelPositions.size() + "\n");
         sb.append("- Sentinel positions:\n");
 
         for (int i = 0; i < sentinelPositions.size(); i++) {
@@ -234,15 +287,36 @@ public class GeminiService {
             sb.append("  Sentinel " + (i + 1) + ": (" + p.getX() + ", " + p.getY() + ")\n");
         }
 
-        sb.append("\nANALYZE and choose the BEST attack position that:\n");
-        sb.append("1. Has exactly 1 sentinel within 50px (safe kill)\n");
-        sb.append("2. Has fewer than 2 sentinels within 100px (avoid counter-attack)\n");
-        sb.append("3. Targets sentinels OUTSIDE the hive (they cannot retreat)\n\n");
+        // Decision memory — show last N outcomes so the LLM can learn within a run
+        synchronized (decisionHistory) {
+            if (!decisionHistory.isEmpty()) {
+                sb.append("\nRECENT ATTACK HISTORY (your past decisions and their outcomes):\n");
+                for (int i = 0; i < decisionHistory.size(); i++) {
+                    DecisionRecord r = decisionHistory.get(i);
+                    String outcome = r.wasSafe
+                            ? "SAFE — no counter-attack received"
+                            : "DANGEROUS — you took " + r.damageTaken + " HP counter-attack damage";
+                    sb.append("- Decision " + (i + 1) + ": Targeted (" + r.targetX + ", " + r.targetY + ") → " + outcome + "\n");
+                }
+                sb.append("Learn from these outcomes: repeat safe patterns, avoid dangerous ones.\n");
+            }
+        }
 
-        sb.append("RESPOND IN THIS EXACT FORMAT:\n");
+        sb.append("\nANALYZE the sentinel positions carefully and choose the BEST attack target that:\n");
+        sb.append("1. Has exactly 1 sentinel within " + attackR + "px of the target position (guarantees a safe kill)\n");
+        sb.append("2. Has fewer than " + threshold + " sentinels within " + counterR + "px (avoids triggering a counter-attack)\n");
+        sb.append("3. Targets sentinels that are OUTSIDE or far from the hive (they cannot retreat to safety)\n");
+        if (healthPct <= 30) {
+            sb.append("4. CRITICAL: Your health is very low (" + healthPct + "%) — prioritize survival over kills. Only attack if it is absolutely safe.\n");
+        } else if (healthPct <= 60) {
+            sb.append("4. CAUTION: Your health is moderate (" + healthPct + "%) — prefer safe targets, avoid unnecessary risks.\n");
+        }
+        sb.append("\n");
+
+        sb.append("RESPOND IN THIS EXACT FORMAT (no extra text):\n");
         sb.append("TARGET_X: <number>\n");
         sb.append("TARGET_Y: <number>\n");
-        sb.append("REASONING: <brief explanation in one line>\n");
+        sb.append("REASONING: <brief explanation of why this target is optimal>\n");
 
         return sb.toString();
     }

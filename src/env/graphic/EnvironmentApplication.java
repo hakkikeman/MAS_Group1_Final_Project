@@ -634,4 +634,29 @@ public class EnvironmentApplication extends Application {
 
 		System.out.println("[UI] Victory screen displayed: " + (waspWon ? "Wasp wins" : "Sentinels win"));
 	}
+
+	/**
+	 * Gracefully shut down the application: stop the timer loop, close JavaFX,
+	 * then terminate the JVM. Called by WaspArtifact when auto-exit is enabled.
+	 */
+	public void shutdownApplication() {
+		System.out.println("[UI] Shutting down application...");
+		stop.set(true); // stops the timer loop
+		javafx.application.Platform.runLater(() -> {
+			try {
+				javafx.application.Platform.exit();
+			} catch (Exception e) {
+				System.err.println("[UI] Platform.exit error: " + e.getMessage());
+			}
+			// Platform.exit may not terminate JVM if non-daemon threads remain
+			// Schedule a hard exit as fallback
+			Thread fallback = new Thread(() -> {
+				try { Thread.sleep(2000); } catch (InterruptedException ignored) {}
+				System.out.println("[UI] Forcing JVM exit.");
+				Runtime.getRuntime().halt(0);
+			});
+			fallback.setDaemon(true);
+			fallback.start();
+		});
+	}
 }

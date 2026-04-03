@@ -95,7 +95,8 @@ public class WaspArtifact extends Artifact {
         GeminiService.AttackDecision d = geminiService.getAttackStrategy(
                 sentinels, wasp.getPosition(),
                 Environment.getInstance().getWidth(),
-                Environment.getInstance().getHeight());
+                Environment.getInstance().getHeight(),
+                wasp.getHealth(), wasp.getMaxHealth());
 
         applyDecision(d, sentinels);
     }
@@ -198,7 +199,8 @@ public class WaspArtifact extends Artifact {
                 decision = geminiService.getAttackStrategy(
                         sentinels, wasp.getPosition(),
                         Environment.getInstance().getWidth(),
-                        Environment.getInstance().getHeight());
+                        Environment.getInstance().getHeight(),
+                        wasp.getHealth(), wasp.getMaxHealth());
             } else {
                 System.out.println("[WaspArtifact] Using prefetched target – no LLM wait.");
             }
@@ -258,7 +260,8 @@ public class WaspArtifact extends Artifact {
                             Environment.getInstance().getSentinelPositions(),
                             wasp.getPosition(),
                             Environment.getInstance().getWidth(),
-                            Environment.getInstance().getHeight());
+                            Environment.getInstance().getHeight(),
+                            wasp.getHealth(), wasp.getMaxHealth());
                     prefetchStarted = true;
                 }
             }
@@ -292,10 +295,14 @@ public class WaspArtifact extends Artifact {
         lastReasoning = d.reasoning;
         updateAttackTarget();
 
-        logger.logLlmDecision(
+        boolean wasSafe = logger.logLlmDecision(
                 wasp.getPosition(), sentinels,
                 d.rawResponse, d.targetX, d.targetY, d.reasoning,
                 d.isFallback);
+
+        // Feed ground-truth outcome back to GeminiService for decision memory
+        int damageTaken = wasSafe ? 0 : cfg.getSentinelCounterDamage();
+        geminiService.recordDecisionOutcome(d.targetX, d.targetY, wasSafe, damageTaken);
     }
 
     /** Quick idle check between decision cycles. Returns false if battle ended. */
@@ -334,6 +341,24 @@ public class WaspArtifact extends Artifact {
             Environment.getInstance().declareWaspVictory();
         } else {
             Environment.getInstance().declareSentinelVictory();
+        }
+
+        // Auto-exit for sweep automation — graceful shutdown after a short delay
+        if (cfg.isAutoExitEnabled()) {
+            int delay = cfg.getAutoExitDelayMs();
+            System.out.println("[WaspArtifact] Auto-exit in " + delay + "ms...");
+            Thread exitThread = new Thread(() -> {
+                try { Thread.sleep(delay); } catch (InterruptedException ignored) {}
+                System.out.println("[WaspArtifact] Initiating graceful shutdown...");
+                try {
+                    graphic.EnvironmentApplication.getInstance().shutdownApplication();
+                } catch (Exception e) {
+                    System.err.println("[WaspArtifact] Shutdown error, forcing exit: " + e.getMessage());
+                    Runtime.getRuntime().halt(0);
+                }
+            });
+            exitThread.setDaemon(false);
+            exitThread.start();
         }
     }
 
